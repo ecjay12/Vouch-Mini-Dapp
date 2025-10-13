@@ -1,6 +1,10 @@
 import React, { useContext, useState, useEffect } from 'react';
 import { UpContext } from './context/UpContext.jsx';
 import { ethers } from 'ethers';
+<<<<<<< HEAD
+=======
+import VouchButton from './components/VouchButton.jsx';
+>>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
 import { ABI, CONTRACT_ADDRESS, UP_ABI, LSP3_PROFILE_KEY, IPFS_GATEWAY } from './config';
 
 function App() {
@@ -13,7 +17,10 @@ function App() {
   const [hiddenVouches, setHiddenVouches] = useState([]);
   const [targetAddress, setTargetAddress] = useState('');
 
+<<<<<<< HEAD
   // Utility function for retries
+=======
+>>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
   const withRetry = async (fn, retries = 3) => {
     for (let i = 0; i < retries; i++) {
       try {
@@ -25,7 +32,20 @@ function App() {
     }
   };
 
+<<<<<<< HEAD
   // Fetch profile data (reused from your code)
+=======
+  const isContract = async (address, currentProvider) => {
+    try {
+      const code = await currentProvider.getCode(address);
+      return code !== '0x';
+    } catch (error) {
+      console.error('Error checking if contract:', error);
+      return false;
+    }
+  };
+
+>>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
   const fetchProfileData = async (address, currentProvider) => {
     try {
       const isUP = await isContract(address, currentProvider);
@@ -63,6 +83,7 @@ function App() {
     }
   };
 
+<<<<<<< HEAD
   // Check if address is a contract
   const isContract = async (address, currentProvider) => {
     try {
@@ -75,6 +96,8 @@ function App() {
   };
 
   // Fetch received vouches
+=======
+>>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
   const fetchVouchersList = async () => {
     if (!provider || !signer) return;
     setFetchingVouchers(true);
@@ -89,8 +112,13 @@ function App() {
         toBlock: 'latest',
         topics: [
           ethers.id('VouchRequested(address,address)'),
+<<<<<<< HEAD
           ethers.zeroPadValue(address, 32),
           null
+=======
+          ethers.zeroPadValue(address, 32), // topics[1]: target = your address
+          null // topics[2]: voucher = any
+>>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
         ],
       };
       const logs = await withRetry(() => provider.getLogs(filter));
@@ -110,15 +138,25 @@ function App() {
 
       vouchersWithDetails = vouchersWithDetails.filter(v => !hiddenVouches.some(h => h.address === v.address));
       setVouchersList(vouchersWithDetails);
+<<<<<<< HEAD
     } catch (error) {
       console.error('Fetch received list error:', error);
       setErrorMessage(`Fetch failed: ${error.message}. Try again.`);
+=======
+      if (vouchersWithDetails.length === 0) setErrorMessage('No received vouches found – try vouching for someone.');
+    } catch (error) {
+      console.error('Fetch received list error:', error);
+      setErrorMessage(`Fetch failed: ${error.message}. Check console.`);
+>>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
     } finally {
       setFetchingVouchers(false);
     }
   };
 
+<<<<<<< HEAD
   // Fetch given vouches
+=======
+>>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
   const fetchGivenVouchesList = async () => {
     if (!provider || !signer) return;
     setFetchingVouchers(true);
@@ -133,8 +171,13 @@ function App() {
         toBlock: 'latest',
         topics: [
           ethers.id('VouchRequested(address,address)'),
+<<<<<<< HEAD
           null,
           ethers.zeroPadValue(address, 32),
+=======
+          null, // topics[1]: target = any
+          ethers.zeroPadValue(address, 32) // topics[2]: voucher = your address
+>>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
         ],
       };
       const logs = await withRetry(() => provider.getLogs(filter));
@@ -152,14 +195,22 @@ function App() {
         })
       );
       setGivenVouchesList(givenWithDetails);
+<<<<<<< HEAD
     } catch (error) {
       console.error('Fetch given list error:', error);
       setErrorMessage(`Fetch failed: ${error.message}. Try again or check network.`);
+=======
+      if (givenWithDetails.length === 0) setErrorMessage('No given vouches found – try vouching for someone.');
+    } catch (error) {
+      console.error('Fetch given list error:', error);
+      setErrorMessage(`Fetch failed: ${error.message}. Check console.`);
+>>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
     } finally {
       setFetchingVouchers(false);
     }
   };
 
+<<<<<<< HEAD
   // Send vouch
   const sendVouch = async () => {
     if (!targetAddress || !ethers.isAddress(targetAddress) || !signer) return;
@@ -167,6 +218,11 @@ function App() {
       setErrorMessage('You cannot vouch for yourself!');
       return;
     }
+=======
+  const sendVouch = async () => {
+    if (!targetAddress || !ethers.isAddress(targetAddress) || !signer) return;
+    setLoading(true);
+>>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
     try {
       const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
       const fee = await contract.fee();
@@ -178,12 +234,23 @@ function App() {
     } catch (error) {
       console.error('Send vouch error:', error);
       setErrorMessage(`Vouch failed: ${error.reason || error.message}. Check console.`);
+<<<<<<< HEAD
     }
   };
 
   // Accept vouch
   const handleAcceptVouch = async (voucher) => {
     if (!signer) return;
+=======
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAcceptVouch = async (voucher) => {
+    if (!signer) return;
+    setLoading(true);
+>>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
     try {
       const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
       const tx = await contract.acceptVouch(voucher);
@@ -193,12 +260,23 @@ function App() {
     } catch (error) {
       console.error('Accept error:', error);
       setErrorMessage(`Accept failed: ${error.reason || error.message}`);
+<<<<<<< HEAD
     }
   };
 
   // Deny vouch
   const handleDenyVouch = async (voucher) => {
     if (!signer) return;
+=======
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDenyVouch = async (voucher) => {
+    if (!signer) return;
+    setLoading(true);
+>>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
     try {
       const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
       const tx = await contract.denyVouch(voucher);
@@ -208,12 +286,23 @@ function App() {
     } catch (error) {
       console.error('Deny error:', error);
       setErrorMessage(`Deny failed: ${error.reason || error.message}`);
+<<<<<<< HEAD
     }
   };
 
   // Revoke vouch
   const handleRevokeVouch = async (target) => {
     if (!signer) return;
+=======
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRevokeVouch = async (target) => {
+    if (!signer) return;
+    setLoading(true);
+>>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
     try {
       const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
       const tx = await contract.cancelVouch(target);
@@ -223,10 +312,18 @@ function App() {
     } catch (error) {
       console.error('Revoke error:', error);
       setErrorMessage(`Revoke failed: ${error.reason || error.message}`);
+<<<<<<< HEAD
     }
   };
 
   // Hide vouch
+=======
+    } finally {
+      setLoading(false);
+    }
+  };
+
+>>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
   const handleHideVouch = async (vouch) => {
     const newHidden = [...hiddenVouches, vouch];
     setHiddenVouches(newHidden);
@@ -236,7 +333,10 @@ function App() {
     setErrorMessage('Vouch hidden locally!');
   };
 
+<<<<<<< HEAD
   // Unhide vouch
+=======
+>>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
   const handleUnhideVouch = async (address) => {
     const newHidden = hiddenVouches.filter(h => h.address !== address);
     setHiddenVouches(newHidden);
@@ -264,7 +364,11 @@ function App() {
       )}
       {errorMessage && <p className="text-center text-red-600 mb-4 font-semibold">{errorMessage}</p>}
       <div className="bg-white p-4 rounded-lg shadow-md border border-teal-300">
+<<<<<<< HEAD
         <h3 className="text-lg font-semibold text-teal-800 mb-3">Vouch for a Profile</h3>
+=======
+        <h3 className="text-lg font-semibold text-teal-800 mb-3">Quick Vouch</h3>
+>>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
         <input
           type="text"
           placeholder="Enter target UP address"
@@ -272,6 +376,7 @@ function App() {
           onChange={(e) => setTargetAddress(e.target.value)}
           className="w-full p-2 border border-gray-300 rounded-lg mb-2 text-sm"
         />
+<<<<<<< HEAD
         <button
           className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm"
           onClick={sendVouch}
@@ -279,6 +384,9 @@ function App() {
         >
           Vouch
         </button>
+=======
+        <VouchButton targetAddress={targetAddress} />
+>>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
       </div>
       <div className="bg-white p-4 rounded-lg shadow-md border border-teal-300 mt-6">
         <div className="flex space-x-4 mb-4">
@@ -307,7 +415,11 @@ function App() {
             {fetchingVouchers ? (
               <p className="text-center text-teal-600 text-sm">Fetching...</p>
             ) : vouchersList.length === 0 ? (
+<<<<<<< HEAD
               <p className="text-teal-600 text-sm">No received vouches yet.</p>
+=======
+              <p className="text-teal-600 text-sm">No received vouches yet. Try vouching for someone to get started!</p>
+>>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
             ) : (
               <ul className="space-y-3">
                 {vouchersList.map((voucher, index) => (
@@ -346,7 +458,11 @@ function App() {
             {fetchingVouchers ? (
               <p className="text-center text-teal-600 text-sm">Fetching...</p>
             ) : givenVouchesList.length === 0 ? (
+<<<<<<< HEAD
               <p className="text-teal-600 text-sm">No given vouches yet.</p>
+=======
+              <p className="text-teal-600 text-sm">No given vouches yet. Try vouching for someone!</p>
+>>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
             ) : (
               <ul className="space-y-3">
                 {givenVouchesList.map((vouch, index) => (
