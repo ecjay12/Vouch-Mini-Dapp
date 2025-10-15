@@ -1,14 +1,10 @@
 import React, { useContext, useState, useEffect } from 'react';
-import { UpContext } from './context/UpContext.jsx';
 import { ethers } from 'ethers';
-<<<<<<< HEAD
-=======
-import VouchButton from './components/VouchButton.jsx';
->>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
-import { ABI, CONTRACT_ADDRESS, UP_ABI, LSP3_PROFILE_KEY, IPFS_GATEWAY } from './config';
+import { UpContext } from './context/UpContext.jsx';
+import { ABI, CONTRACT_ADDRESS, IPFS_GATEWAY } from './config';
 
 function App() {
-  const { signer, provider, profile, loading, error } = useContext(UpContext);
+  const { signer, provider, profile, loading } = useContext(UpContext);
   const [errorMessage, setErrorMessage] = useState('');
   const [vouchersList, setVouchersList] = useState([]);
   const [givenVouchesList, setGivenVouchesList] = useState([]);
@@ -16,11 +12,25 @@ function App() {
   const [activeTab, setActiveTab] = useState('received');
   const [hiddenVouches, setHiddenVouches] = useState([]);
   const [targetAddress, setTargetAddress] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
 
-<<<<<<< HEAD
-  // Utility function for retries
-=======
->>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!signer) return;
+      try {
+        const address = await signer.getAddress();
+        const storedHidden = localStorage.getItem(`hiddenVouches_${address}`);
+        if (storedHidden) setHiddenVouches(JSON.parse(storedHidden));
+        if (activeTab === 'received') await fetchVouchersList();
+        else if (activeTab === 'given') await fetchGivenVouchesList();
+      } catch (error) {
+        console.error('Fetch data error:', error);
+        setErrorMessage('Failed to load data. Check console.');
+      }
+    };
+    fetchData();
+  }, [signer, activeTab]);
+
   const withRetry = async (fn, retries = 3) => {
     for (let i = 0; i < retries; i++) {
       try {
@@ -32,12 +42,9 @@ function App() {
     }
   };
 
-<<<<<<< HEAD
-  // Fetch profile data (reused from your code)
-=======
-  const isContract = async (address, currentProvider) => {
+  const isContract = async (address) => {
     try {
-      const code = await currentProvider.getCode(address);
+      const code = await provider.getCode(address);
       return code !== '0x';
     } catch (error) {
       console.error('Error checking if contract:', error);
@@ -45,85 +52,52 @@ function App() {
     }
   };
 
->>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
-  const fetchProfileData = async (address, currentProvider) => {
+  const fetchProfileData = async (address) => {
     try {
-      const isUP = await isContract(address, currentProvider);
-      if (!isUP) {
-        return { name: 'EOA Address', description: 'External Owned Account', picture: '' };
-      }
+      const isUP = await isContract(address);
+      if (!isUP) return { name: 'EOA Address', picture: '' };
 
-      const upContract = new ethers.Contract(address, UP_ABI, currentProvider);
+      const upContract = new ethers.Contract(address, UP_ABI, provider);
       const profileData = await withRetry(() => upContract.getData(LSP3_PROFILE_KEY));
-
-      if (!profileData || profileData === '0x') {
-        return { name: 'Universal Profile', description: 'No description available', picture: '' };
-      }
+      if (!profileData || profileData === '0x') return { name: 'Universal Profile', picture: '' };
 
       let jsonString;
       const bytes = ethers.getBytes(profileData);
       const decodedString = ethers.toUtf8String(bytes.slice(40));
-
       if (decodedString.startsWith('ipfs://')) {
         const hash = decodedString.replace('ipfs://', '');
         const fetchUrl = `${IPFS_GATEWAY}${hash}`;
         const response = await fetch(fetchUrl);
-        if (!response.ok) throw new Error(`IPFS fetch failed: ${response.status}`);
         jsonString = await response.text();
       } else {
         jsonString = decodedString;
       }
-
       const profileJson = JSON.parse(jsonString);
-      const name = profileJson.LSP3Profile?.name || 'Universal Profile';
-      const description = profileJson.LSP3Profile?.description || 'No description available';
-      let picture = '';
-      if (profileJson.LSP3Profile?.profileImage?.length > 0) {
-        const imageUrl = profileJson.LSP3Profile.profileImage[0].url;
-        picture = imageUrl.startsWith('ipfs://') ? `${IPFS_GATEWAY}${imageUrl.replace('ipfs://', '')}` : imageUrl;
-      }
-      return { name, description, picture };
+      return {
+        name: profileJson.LSP3Profile?.name || 'Universal Profile',
+        picture: profileJson.LSP3Profile?.profileImage?.[0]?.url || ''
+      };
     } catch (error) {
-      console.error('Fetch profile error for', address, ':', error);
-      return { name: 'Universal Profile', description: 'Error loading profile', picture: '' };
+      console.error('Fetch profile error:', error);
+      return { name: 'Universal Profile', picture: '' };
     }
   };
 
-<<<<<<< HEAD
-  // Check if address is a contract
-  const isContract = async (address, currentProvider) => {
-    try {
-      const code = await currentProvider.getCode(address);
-      return code !== '0x';
-    } catch (error) {
-      console.error('Error checking if contract:', error);
-      return false;
-    }
-  };
-
-  // Fetch received vouches
-=======
->>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
   const fetchVouchersList = async () => {
-    if (!provider) return;
+    if (!provider || !signer) return;
     setFetchingVouchers(true);
     setErrorMessage('');
     try {
-      const address = await signer?.getAddress() || '';
+      const address = await signer.getAddress();
       const currentBlock = await provider.getBlockNumber();
       const fromBlock = Math.max(0, currentBlock - 100000);
       const filter = {
         address: CONTRACT_ADDRESS,
         fromBlock,
         toBlock: 'latest',
-        topics: [
-          ethers.id('VouchRequested(address,address)'),
-          ethers.zeroPadValue(address, 32), // topics[1]: target = your address
-          null // topics[2]: voucher = any
-        ],
+        topics: [ethers.id('VouchRequested(address,address)'), ethers.zeroPadValue(address, 32), null]
       };
       const logs = await withRetry(() => provider.getLogs(filter));
-      console.log('Received logs:', logs);
 
       const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
       let vouchersWithDetails = await Promise.all(
@@ -132,47 +106,37 @@ function App() {
           const vouchData = await contract.getVouch(address, voucher);
           const statusMap = ['None', 'Pending', 'Accepted', 'Denied'];
           const status = statusMap[vouchData.status] || 'Unknown';
-          const profileData = await fetchProfileData(voucher, provider);
+          const profileData = await fetchProfileData(voucher);
           return { address: voucher, name: profileData.name, status };
         })
       );
 
       vouchersWithDetails = vouchersWithDetails.filter(v => !hiddenVouches.some(h => h.address === v.address));
       setVouchersList(vouchersWithDetails);
-      if (vouchersWithDetails.length === 0) setErrorMessage('No received vouches found – try vouching for someone.');
+      // Add if you want accepted count: const newAcceptedCount = vouchersWithDetails.filter(v => v.status === 'Accepted').length; setAcceptedCount(newAcceptedCount);
     } catch (error) {
       console.error('Fetch received list error:', error);
-      setErrorMessage(`Fetch failed: ${error.message}. Check console.`);
->>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
+      setErrorMessage(`Fetch failed: ${error.message}. Try again.`);
     } finally {
       setFetchingVouchers(false);
     }
   };
 
-<<<<<<< HEAD
-  // Fetch given vouches
-=======
->>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
   const fetchGivenVouchesList = async () => {
-    if (!provider) return;
+    if (!provider || !signer) return;
     setFetchingVouchers(true);
     setErrorMessage('');
     try {
-      const address = await signer?.getAddress() || '';
+      const address = await signer.getAddress();
       const currentBlock = await provider.getBlockNumber();
       const fromBlock = Math.max(0, currentBlock - 100000);
       const filter = {
         address: CONTRACT_ADDRESS,
         fromBlock,
         toBlock: 'latest',
-        topics: [
-          ethers.id('VouchRequested(address,address)'),
-          null, // topics[1]: target = any
-          ethers.zeroPadValue(address, 32) // topics[2]: voucher = your address
-        ],
+        topics: [ethers.id('VouchRequested(address,address)'), null, ethers.zeroPadValue(address, 32)]
       };
       const logs = await withRetry(() => provider.getLogs(filter));
-      console.log('Given logs:', logs);
 
       const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
       const givenWithDetails = await Promise.all(
@@ -181,29 +145,29 @@ function App() {
           const vouchData = await contract.getVouch(target, address);
           const statusMap = ['None', 'Pending', 'Accepted', 'Denied'];
           const status = statusMap[vouchData.status] || 'Unknown';
-          const profileData = await fetchProfileData(target, provider);
+          const profileData = await fetchProfileData(target);
           return { address: target, name: profileData.name, status };
         })
       );
+
       setGivenVouchesList(givenWithDetails);
-<<<<<<< HEAD
     } catch (error) {
       console.error('Fetch given list error:', error);
-      setErrorMessage(`Fetch failed: ${error.message}. Try again or check network.`);
-=======
-      if (givenWithDetails.length === 0) setErrorMessage('No given vouches found – try vouching for someone.');
-    } catch (error) {
-      console.error('Fetch given list error:', error);
-      setErrorMessage(`Fetch failed: ${error.message}. Check console.`);
->>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
+      setErrorMessage(`Fetch failed: ${error.message}. Try again.`);
     } finally {
       setFetchingVouchers(false);
     }
   };
 
   const sendVouch = async () => {
-    if (!targetAddress || !ethers.isAddress(targetAddress) || !signer) return;
-    setLoading(true);
+    if (!signer || !ethers.isAddress(targetAddress)) return;
+    const address = await signer.getAddress();
+    if (targetAddress.toLowerCase() === address.toLowerCase()) {
+      setErrorMessage('You cannot vouch for yourself!');
+      return;
+    }
+
+    setActionLoading(true);
     try {
       const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
       const fee = await contract.fee();
@@ -214,15 +178,14 @@ function App() {
       await fetchVouchersList();
     } catch (error) {
       console.error('Send vouch error:', error);
-      setErrorMessage(`Vouch failed: ${error.reason || error.message}. Check console.`);
+      setErrorMessage(`Vouch failed: ${error.reason || error.message}`);
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
   const handleAcceptVouch = async (voucher) => {
-    if (!signer) return;
-    setLoading(true);
+    setActionLoading(true);
     try {
       const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
       const tx = await contract.acceptVouch(voucher);
@@ -233,13 +196,12 @@ function App() {
       console.error('Accept error:', error);
       setErrorMessage(`Accept failed: ${error.reason || error.message}`);
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
   const handleDenyVouch = async (voucher) => {
-    if (!signer) return;
-    setLoading(true);
+    setActionLoading(true);
     try {
       const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
       const tx = await contract.denyVouch(voucher);
@@ -250,13 +212,12 @@ function App() {
       console.error('Deny error:', error);
       setErrorMessage(`Deny failed: ${error.reason || error.message}`);
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
   const handleRevokeVouch = async (target) => {
-    if (!signer) return;
-    setLoading(true);
+    setActionLoading(true);
     try {
       const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
       const tx = await contract.cancelVouch(target);
@@ -267,65 +228,96 @@ function App() {
       console.error('Revoke error:', error);
       setErrorMessage(`Revoke failed: ${error.reason || error.message}`);
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
-  const handleHideVouch = async (vouch) => {
-    const newHidden = [...hiddenVouches, vouch];
-    setHiddenVouches(newHidden);
-    const address = signer?.getAddress ? signer.getAddress() : null;
-    if (address) localStorage.setItem(`hiddenVouches_${address}`, JSON.stringify(newHidden));
-    fetchVouchersList();
-    setErrorMessage('Vouch hidden locally!');
+  const handleHideVouch = (vouch) => {
+    const fetchAddress = async () => {
+      if (signer) {
+        const address = await signer.getAddress();
+        const newHidden = [...hiddenVouches, vouch];
+        setHiddenVouches(newHidden);
+        localStorage.setItem(`hiddenVouches_${address}`, JSON.stringify(newHidden));
+        await fetchVouchersList();
+        setErrorMessage('Vouch hidden locally!');
+      }
+    };
+    fetchAddress();
   };
 
-  const handleUnhideVouch = async (address) => {
-    const newHidden = hiddenVouches.filter(h => h.address !== address);
-    setHiddenVouches(newHidden);
-    const userAddress = signer?.getAddress ? signer.getAddress() : null;
-    if (userAddress) localStorage.setItem(`hiddenVouches_${userAddress}`, JSON.stringify(newHidden));
-    fetchVouchersList();
-    setErrorMessage('Vouch unhidden!');
+  const handleUnhideVouch = (address) => {
+    const fetchAddress = async () => {
+      if (signer) {
+        const addr = await signer.getAddress();
+        const newHidden = hiddenVouches.filter(h => h.address !== address);
+        setHiddenVouches(newHidden);
+        localStorage.setItem(`hiddenVouches_${addr}`, JSON.stringify(newHidden));
+        await fetchVouchersList();
+        setErrorMessage('Vouch unhidden!');
+      }
+    };
+    fetchAddress();
   };
 
-  if (loading) return <div className="p-6 text-center text-teal-600">Loading UP...</div>;
-
-  if (error) {
-    return <div className="p-6 text-center text-red-600">{error}</div>;
+  if (loading) {
+    return (
+      <div className="p-6 text-center">
+        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
+        <p className="mt-2 text-teal-600">Loading UP...</p>
+      </div>
+    );
   }
 
   return (
     <div className="p-6 font-sans bg-gradient-to-b from-teal-100 to-blue-200 min-h-screen">
       <h1 className="text-3xl font-bold text-center text-teal-800 mb-6">🏝️ Ohana Vouch MiniApp 🌴</h1>
       <p className="text-center text-teal-700 mb-4">Connected: {profile.name}</p>
-      {profile.picture && <img src={profile.picture} alt="Profile" className="rounded-full w-20 h-20 mx-auto mb-4 object-cover border-2 border-green-400" />}
+
+      {actionLoading && (
+        <div className="text-center text-teal-600 mb-4">
+          <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-teal-600"></div>
+          <p className="mt-2">Processing transaction...</p>
+        </div>
+      )}
+
       {errorMessage && <p className="text-center text-red-600 mb-4 font-semibold">{errorMessage}</p>}
+
       <div className="bg-white p-4 rounded-lg shadow-md border border-teal-300">
-<<<<<<< HEAD
+        <div className="flex flex-col items-center">
+          {profile.picture ? (
+            <img
+              src={profile.picture}
+              alt="Profile"
+              className="rounded-full w-20 h-20 mb-3 object-cover border-2 border-green-400"
+            />
+          ) : (
+            <div className="rounded-full w-20 h-20 bg-teal-100 flex items-center justify-center mb-3">
+              <span className="text-teal-500 text-sm">No Image</span>
+            </div>
+          )}
+          <p className="text-teal-600 text-sm text-center">Profile</p>
+        </div>
+      </div>
+
+      <div className="bg-white p-4 rounded-lg shadow-md border border-teal-300 mt-6">
         <h3 className="text-lg font-semibold text-teal-800 mb-3">Vouch for a Profile</h3>
-=======
-        <h3 className="text-lg font-semibold text-teal-800 mb-3">Quick Vouch</h3>
->>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
         <input
           type="text"
           placeholder="Enter target UP address"
           value={targetAddress}
-          onChange={handleTargetAddressChange}
+          onChange={(e) => setTargetAddress(e.target.value)}
           className="w-full p-2 border border-gray-300 rounded-lg mb-2 text-sm"
         />
-<<<<<<< HEAD
         <button
-          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm"
+          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm w-full"
           onClick={sendVouch}
-          disabled={!targetAddress || !ethers.isAddress(targetAddress)}
+          disabled={!targetAddress || actionLoading}
         >
           Vouch
         </button>
-=======
-        <VouchButton targetAddress={targetAddress} />
->>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
       </div>
+
       <div className="bg-white p-4 rounded-lg shadow-md border border-teal-300 mt-6">
         <div className="flex space-x-4 mb-4">
           <button
@@ -347,13 +339,14 @@ function App() {
             Settings ⚙️
           </button>
         </div>
+
         {activeTab === 'received' && (
           <>
             <h3 className="text-lg font-semibold text-teal-800 mb-3">Your Received Vouches</h3>
             {fetchingVouchers ? (
               <p className="text-center text-teal-600 text-sm">Fetching...</p>
             ) : vouchersList.length === 0 ? (
-              <p className="text-teal-600 text-sm">No received vouches yet. Try vouching for someone to get started!</p>
+              <p className="text-teal-600 text-sm">No received vouches yet.</p>
             ) : (
               <ul className="space-y-3">
                 {vouchersList.map((voucher, index) => (
@@ -364,39 +357,38 @@ function App() {
                         {voucher.status}
                       </span>
                     </p>
-                    {voucher.status === 'Pending' && (
-                      <>
-                        <button className="bg-green-500 text-white px-2 py-1 rounded text-xs mr-2" onClick={() => handleAcceptVouch(voucher.address)}>
-                          Accept
-                        </button>
-                        <button className="bg-red-500 text-white px-2 py-1 rounded text-xs" onClick={() => handleDenyVouch(voucher.address)}>
-                          Deny
-                        </button>
-                      </>
-                    )}
-                    <button className="bg-gray-500 text-white px-2 py-1 rounded text-xs mt-1" onClick={() => handleHideVouch(voucher)}>
-                      Hide
-                    </button>
+                    <div className="flex space-x-2 mt-1">
+                      {voucher.status === 'Pending' && (
+                        <>
+                          <button className="bg-green-500 text-white px-2 py-1 rounded text-xs" onClick={() => handleAcceptVouch(voucher.address)}>
+                            Accept
+                          </button>
+                          <button className="bg-red-500 text-white px-2 py-1 rounded text-xs" onClick={() => handleDenyVouch(voucher.address)}>
+                            Deny
+                          </button>
+                        </>
+                      )}
+                      <button className="bg-gray-500 text-white px-2 py-1 rounded text-xs" onClick={() => handleHideVouch(voucher)}>
+                        Hide
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
             )}
-            <button className="bg-teal-500 text-white px-4 py-1 rounded mt-3 hover:bg-teal-600 text-sm" onClick={fetchVouchersList} disabled={fetchingVouchers || !provider}>
+            <button className="bg-teal-500 text-white px-4 py-1 rounded mt-3 hover:bg-teal-600 text-sm" onClick={fetchVouchersList} disabled={fetchingVouchers}>
               Refresh Received
             </button>
           </>
         )}
+
         {activeTab === 'given' && (
           <>
             <h3 className="text-lg font-semibold text-teal-800 mb-3">Your Given Vouches</h3>
             {fetchingVouchers ? (
               <p className="text-center text-teal-600 text-sm">Fetching...</p>
             ) : givenVouchesList.length === 0 ? (
-<<<<<<< HEAD
               <p className="text-teal-600 text-sm">No given vouches yet.</p>
-=======
-              <p className="text-teal-600 text-sm">No given vouches yet. Try vouching for someone!</p>
->>>>>>> 07726ff (Initial commit for Ohana Vouch MiniApp)
             ) : (
               <ul className="space-y-3">
                 {givenVouchesList.map((vouch, index) => (
@@ -414,11 +406,12 @@ function App() {
                 ))}
               </ul>
             )}
-            <button className="bg-teal-500 text-white px-4 py-1 rounded mt-3 hover:bg-teal-600 text-sm" onClick={fetchGivenVouchesList} disabled={fetchingVouchers || !provider}>
+            <button className="bg-teal-500 text-white px-4 py-1 rounded mt-3 hover:bg-teal-600 text-sm" onClick={fetchGivenVouchesList} disabled={fetchingVouchers}>
               Refresh Given
             </button>
           </>
         )}
+
         {activeTab === 'settings' && (
           <>
             <h3 className="text-lg font-semibold text-teal-800 mb-3">Settings: Hidden Received Vouches</h3>
