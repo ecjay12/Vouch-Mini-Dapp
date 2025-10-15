@@ -1,10 +1,10 @@
 import React, { useContext, useState, useEffect } from 'react';
+import { UpContext } from './context/UpContext';
 import { ethers } from 'ethers';
-import { UpContext } from './context/UpContext.jsx';
 import { ABI, CONTRACT_ADDRESS, IPFS_GATEWAY } from './config';
 
 function App() {
-  const { signer, provider, profile, loading } = useContext(UpContext);
+  const { signer, provider, profile, loading, accounts, contextAccounts, chainId } = useContext(UpContext);
   const [errorMessage, setErrorMessage] = useState('');
   const [vouchersList, setVouchersList] = useState([]);
   const [givenVouchesList, setGivenVouchesList] = useState([]);
@@ -16,20 +16,12 @@ function App() {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!signer) return;
-      try {
-        const address = await signer.getAddress();
-        const storedHidden = localStorage.getItem(`hiddenVouches_${address}`);
-        if (storedHidden) setHiddenVouches(JSON.parse(storedHidden));
-        if (activeTab === 'received') await fetchVouchersList();
-        else if (activeTab === 'given') await fetchGivenVouchesList();
-      } catch (error) {
-        console.error('Fetch data error:', error);
-        setErrorMessage('Failed to load data. Check console.');
-      }
+      if (!provider || !signer || accounts.length === 0) return;
+      if (activeTab === 'received') await fetchVouchersList();
+      else if (activeTab === 'given') await fetchGivenVouchesList();
     };
     fetchData();
-  }, [signer, activeTab]);
+  }, [provider, signer, accounts, activeTab]);
 
   const withRetry = async (fn, retries = 3) => {
     for (let i = 0; i < retries; i++) {
@@ -88,7 +80,7 @@ function App() {
     setFetchingVouchers(true);
     setErrorMessage('');
     try {
-      const address = await signer.getAddress();
+      const address = accounts[0]; // Use first account from UP
       const currentBlock = await provider.getBlockNumber();
       const fromBlock = Math.max(0, currentBlock - 100000);
       const filter = {
@@ -113,7 +105,6 @@ function App() {
 
       vouchersWithDetails = vouchersWithDetails.filter(v => !hiddenVouches.some(h => h.address === v.address));
       setVouchersList(vouchersWithDetails);
-      // Add if you want accepted count: const newAcceptedCount = vouchersWithDetails.filter(v => v.status === 'Accepted').length; setAcceptedCount(newAcceptedCount);
     } catch (error) {
       console.error('Fetch received list error:', error);
       setErrorMessage(`Fetch failed: ${error.message}. Try again.`);
@@ -127,7 +118,7 @@ function App() {
     setFetchingVouchers(true);
     setErrorMessage('');
     try {
-      const address = await signer.getAddress();
+      const address = accounts[0]; // Use first account from UP
       const currentBlock = await provider.getBlockNumber();
       const fromBlock = Math.max(0, currentBlock - 100000);
       const filter = {
@@ -161,7 +152,7 @@ function App() {
 
   const sendVouch = async () => {
     if (!signer || !ethers.isAddress(targetAddress)) return;
-    const address = await signer.getAddress();
+    const address = accounts[0];
     if (targetAddress.toLowerCase() === address.toLowerCase()) {
       setErrorMessage('You cannot vouch for yourself!');
       return;
@@ -234,8 +225,8 @@ function App() {
 
   const handleHideVouch = (vouch) => {
     const fetchAddress = async () => {
-      if (signer) {
-        const address = await signer.getAddress();
+      if (accounts.length > 0) {
+        const address = accounts[0];
         const newHidden = [...hiddenVouches, vouch];
         setHiddenVouches(newHidden);
         localStorage.setItem(`hiddenVouches_${address}`, JSON.stringify(newHidden));
@@ -248,8 +239,8 @@ function App() {
 
   const handleUnhideVouch = (address) => {
     const fetchAddress = async () => {
-      if (signer) {
-        const addr = await signer.getAddress();
+      if (accounts.length > 0) {
+        const addr = accounts[0];
         const newHidden = hiddenVouches.filter(h => h.address !== address);
         setHiddenVouches(newHidden);
         localStorage.setItem(`hiddenVouches_${addr}`, JSON.stringify(newHidden));
@@ -272,7 +263,7 @@ function App() {
   return (
     <div className="p-6 font-sans bg-gradient-to-b from-teal-100 to-blue-200 min-h-screen">
       <h1 className="text-3xl font-bold text-center text-teal-800 mb-6">🏝️ Ohana Vouch MiniApp 🌴</h1>
-      <p className="text-center text-teal-700 mb-4">Connected: {profile.name}</p>
+      <p className="text-center text-teal-700 mb-4">Connected: {profile.name} (Chain ID: {chainId}) | Accounts: {accounts.length > 0 ? accounts[0].slice(0, 6) + '...' + accounts[0].slice(-4) : 'None'}</p>
 
       {actionLoading && (
         <div className="text-center text-teal-600 mb-4">
@@ -312,7 +303,7 @@ function App() {
         <button
           className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm w-full"
           onClick={sendVouch}
-          disabled={!targetAddress || actionLoading}
+          disabled={!targetAddress || actionLoading || !signer}
         >
           Vouch
         </button>
