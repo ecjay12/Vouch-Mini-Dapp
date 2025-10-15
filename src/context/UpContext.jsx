@@ -1,7 +1,7 @@
-import React, { createContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useEffect, useCallback } from 'react';
 import { createClientUPProvider } from '@lukso/up-provider';
 import { ethers } from 'ethers';
-import { UP_ABI, LSP3_PROFILE_KEY, IPFS_GATEWAY, RPC_URL } from '../config';
+import { UP_ABI, LSP3_PROFILE_KEY, IPFS_GATEWAY } from '../config';
 
 export const UpContext = createContext();
 
@@ -12,28 +12,21 @@ export function UpProviderWrapper({ children }) {
   const [profile, setProfile] = useState({ name: '', picture: '' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [accounts, setAccounts] = useState([]);
+  const [contextAccounts, setContextAccounts] = useState([]);
+  const [chainId, setChainId] = useState(4201); // Default to LUKSO testnet
 
-  useEffect(() => {
-    const initUp = async () => {
+  const updateState = useCallback(async (newAccounts, newContextAccounts, newChainId) => {
+    setAccounts(newAccounts || []);
+    setContextAccounts(newContextAccounts || []);
+    if (newAccounts?.length > 0 && newContextAccounts?.length > 0) {
       try {
-        // Initialize UP provider
-        const up = createClientUPProvider();
-        setUpAccount(up);
-
-        // Check if UP is available
-        const accounts = await up.request({ method: 'eth_accounts' });
-        if (!accounts || accounts.length === 0) {
-          throw new Error('No UP detected. Please use a UP-compatible environment (e.g., Universal Everything browser).');
-        }
-
-        const ethersProvider = new ethers.BrowserProvider(up, { chainId: 4201 }); // LUKSO testnet
+        const ethersProvider = new ethers.BrowserProvider(upAccount, { chainId: newChainId });
         setProvider(ethersProvider);
         const ethSigner = await ethersProvider.getSigner();
         setSigner(ethSigner);
 
-        // Fetch profile data
         const address = await ethSigner.getAddress();
-        console.log('Connected address:', address); // Debug
         const upContract = new ethers.Contract(address, UP_ABI, ethersProvider);
         const profileData = await upContract.getData(LSP3_PROFILE_KEY);
         if (profileData && profileData !== '0x') {
@@ -53,44 +46,49 @@ export function UpProviderWrapper({ children }) {
           });
         }
       } catch (err) {
-        console.error('UP init failed:', err);
-        // Fallback to RPC for dev (won't have UP data)
-        try {
-          const fallbackProvider = new ethers.JsonRpcProvider(RPC_URL, 4201, { pollingInterval: 5000, timeout: 10000 });
-          await fallbackProvider.getNetwork(); // Test connection
-          setProvider(fallbackProvider);
-          const fallbackSigner = await fallbackProvider.getSigner();
-          setSigner(fallbackSigner);
-          const address = await fallbackSigner.getAddress();
-          console.log('Fallback address:', address); // Debug
-          const upContract = new ethers.Contract(address, UP_ABI, fallbackProvider);
-          const profileData = await upContract.getData(LSP3_PROFILE_KEY);
-          if (profileData && profileData !== '0x') {
-            const bytes = ethers.getBytes(profileData);
-            const decodedString = ethers.toUtf8String(bytes.slice(40));
-            let jsonString = decodedString;
-            if (decodedString.startsWith('ipfs://')) {
-              const hash = decodedString.replace('ipfs://', '');
-              const fetchUrl = `${IPFS_GATEWAY}${hash}`;
-              const response = await fetch(fetchUrl);
-              jsonString = await response.text();
-            }
-            const profileJson = JSON.parse(jsonString);
-            setProfile({
-              name: profileJson.LSP3Profile?.name || 'Universal Profile',
-              picture: profileJson.LSP3Profile?.profileImage?.[0]?.url || ''
-            });
-          }
-        } catch (fallbackErr) {
-          console.error('Fallback provider failed:', fallbackErr);
-          setError('Failed to connect to UP or fallback network. Ensure you\'re in a UP-compatible environment or check your RPC.');
-        }
+        console.error('State update failed:', err);
+        setError('Failed to initialize signer or fetch profile. Check UP connection.');
+      }
+    } else {
+      setError('No UP accounts detected. Please connect via the parent app.');
+    }
+  }, []);
+
+  useEffect(() => {
+    const up = createClientUPProvider();
+    setUpAccount(up);
+
+    // Initial state
+    const init = async () => {
+      try {
+        const initialAccounts = up.allowedAccounts || [];
+        const initialContextAccounts = up.contextAccounts || [];
+        const initialChainId = await up.request({ method: 'eth_chainId' }).then(id => parseInt(id, 16)) || 4201;
+        await updateState(initialAccounts, initialContextAccounts, initialChainId);
+      } catch (err) {
+        console.error('Initial setup failed:', err);
+        setError('Failed to initialize UP. Ensure you\'re in a UP-compatible environment.');
       } finally {
         setLoading(false);
       }
     };
-    initUp();
-  }, []);
+    init();
+
+    // Event listeners
+    const accountsChanged = (newAccounts) => updateState(newAccounts, contextAccounts, chainId);
+    const contextAccountsChanged = (newContextAccounts) => updateState(accounts, newContextAccounts, chainId);
+    const chainChanged = (newChainId) => updateState(accounts, contextAccounts, parseInt(newChainId, 16));
+
+    up.on('accountsChanged', accountsChanged);
+    up.on('contextAccountsChanged', contextAccountsChanged);
+    up.on('chainChanged', chainChanged);
+
+    return () => {
+      up.removeListener('accountsChanged', accountsChanged);
+      up.removeListener('contextAccountsChanged', contextAccountsChanged);
+      up.removeListener('chainChanged', chainChanged);
+    };
+  }, [updateState]);
 
   if (error) {
     return (
@@ -109,7 +107,7 @@ export function UpProviderWrapper({ children }) {
   }
 
   return (
-    <UpContext.Provider value={{ upAccount, signer, provider, profile, loading }}>
+    <UpContext.Provider value={{ upAccount, signer, provider, profile, loading, accounts, contextAccounts, chainId }}>
       {children}
     </UpContext.Provider>
   );
